@@ -110,8 +110,8 @@ The evaluation service itself does not hold ** model and vector capabilities, an
 | Dependency capabilities | SPI port | Default implementation | Purpose of this service | Adapter class |
 | --- | --- | --- | --- | --- |
 | Model supply | `LLMProvider` (`1.0.0`) | Qwen/OpenAI/Claude | Agent inference call; synthetic data generation | `LLMProviderAdapter` Unified export via gateway |
-| Vector retrieval | `VectorStore` (`1.1.0`) | Qdrant | RAG evaluation (Ragas) retrieval context fidelity | `VectorStoreAdapter` |
-| Agent runtime | `AgentRuntime` (`1.3.0`) | LangGraph | Execute the evaluated Agent | `AgentRuntimeAdapter` |
+| Vector retrieval | `VectorStore` (`1.0.0`) | Qdrant | RAG evaluation (Ragas) retrieval context fidelity | `VectorStoreAdapter` |
+| Agent runtime | `AgentRuntime` (`1.0.0`) | LangGraph | Execute the evaluated Agent | `AgentRuntimeAdapter` |
 | LLM tracking | `Tracing` | Langfuse (optional) | Evaluation track traces, report correlation | `TracingAdapter` |
 | Cache/KV | `Cache` (`1.0.0`) | Redis | Temporary cache of task status and scoring results | `CacheAdapter` |
 | Authentication and Authorization | `Auth` (`1.0.0`) | Keycloak | Tenant isolation and access control for datasets/reports | `AuthAdapter` |

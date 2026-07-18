@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ai-eval-service"
-version = "1.4.0"
+version = "1.0.0"
 description = "OpenStrata ai-eval-service"
 authors = ["OpenStrata <openstrata@outlook.com>"]
 packages = [{{ include = "ai_eval_service" }}]

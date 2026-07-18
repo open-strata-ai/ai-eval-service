@@ -6,11 +6,11 @@
 
 | item | value |
 | --- | --- |
-| **repo** | `ai-eval-service`（polyrepo：`github.com/openstrata/ai-eval-service`，tag `v1.4.0`） |
+| **repo** | `ai-eval-service`（polyrepo：`github.com/openstrata/ai-eval-service`，tag `v1.0.0`） |
 | **Language · Framework** | Python · FastAPI + Pydantic v2 + Poetry (§15.5.1) |
 | **domain** | ai-native (§15.2 / §15.2.1) |
 | **Optional** | optional (off by default, lit on demand starting from phase 2/E4, §4.6 / §6 / §12.2) |
-| **Platform version** | `v1.4.0` (corresponding to `openstrata-meta/repos.yaml`, `bom.yaml` released `2026-07-15`) |
+| **Platform version** | `v1.0.0` (corresponding to `openstrata-meta/repos.yaml`, `bom.yaml` released `2026-07-15`) |
 | **Document Status** | Draft (Draft) |
 | **Responsible Person** | OpenStrata Architecture Group |
 | **Affiliated links** | This repository: [arch/ARCH.md](./../arch/ARCH.md) · [skills/SKILLS.md](./../skills/SKILLS.md) · [specs/SPECS.md](./../specs/SPECS.md); Architecture documents: §4.6 (MLOps and evaluation layer), §6 (Agent Full life cycle), §10.4 (SPI multiple implementations), §15.5 (self-developed service technology stack and DDD layering), §16 (release management and BOM/Eval SPI) |
@@ -217,8 +217,8 @@ The evaluation service itself does not hold ** model and vector capabilities, an
 | Dependency | SPI port | Default ✅ / Alternative (bom.yaml) | Purpose of this service | Adapter implementation |
 | --- | --- | --- | --- | --- |
 | Model supply | `LLMProvider` (`1.0.0`) | Qwen/OpenAI/Claude ✅ / Self-hosted vLLM·TGI (Phase 4·full) | Inference call of Agent in evaluation; can also be used for **synthetic data generation** (§4.6.3) | `LLMProviderAdapter` unified export via `ai-gateway-core` |
-| Vector retrieval | `VectorStore` (`1.1.0`) | Qdrant ✅ / Milvus (optional) | RAG evaluation (Ragas) requires retrieval context fidelity | `VectorStoreAdapter` |
-| Agent runtime | `AgentRuntime` (`1.3.0`) | LangGraph ✅ (Python) / Spring AI ✅ (Java) | Execute the evaluated Agent (§4.2 run phase) | `AgentRuntimeAdapter` (LangGraph) |
+| Vector retrieval | `VectorStore` (`1.0.0`) | Qdrant ✅ / Milvus (optional) | RAG evaluation (Ragas) requires retrieval context fidelity | `VectorStoreAdapter` |
+| Agent runtime | `AgentRuntime` (`1.0.0`) | LangGraph ✅ (Python) / Spring AI ✅ (Java) | Execute the evaluated Agent (§4.2 run phase) | `AgentRuntimeAdapter` (LangGraph) |
 | LLM tracking | `Tracing` | Langfuse ✅ (MIT, optional) | Evaluation track traces, report correlation (§4.8) | `TracingAdapter` |
 | Cache / KV | `Cache` (`1.0.0`) | Redis ✅ / Valkey (optional·OSI) | Temporary cache of task status and scoring results | `CacheAdapter` |
 | Authentication and Authorization | `Auth` (`1.0.0`) | Keycloak ✅ | Tenant isolation and access control for datasets/reports | `AuthAdapter` |
