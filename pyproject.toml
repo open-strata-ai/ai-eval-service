@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "ai-eval-service"
+version = "1.4.0"
+description = "OpenStrata ai-eval-service"
+authors = ["OpenStrata <openstrata@outlook.com>"]
+packages = [{{ include = "ai_eval_service" }}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.111.0"
+uvicorn = "^0.30.0"
+pydantic = "^2.7.0"
+sqlalchemy = "^2.0.0"
+psycopg2-binary = "^2.9.0"
+redis = "^5.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.0"
+ruff = "^0.5.0"
+mypy = "^1.10.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
