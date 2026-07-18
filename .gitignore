@@ -1,1 +1,10 @@
-__pycache__/ *.py[cod] *.egg-info/ dist/ build/ .venv/ venv/ .idea/ .vscode/ .DS_Store .env .env.local *.egg
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/

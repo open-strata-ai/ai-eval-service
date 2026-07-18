@@ -1,0 +1,19 @@
+# ai-eval-service local configuration fragment (§15.6.3 / DESIGN §10.1)
+# Global config is rendered by openstrata-meta/dependencies/config/.
+eval:
+  enabled: true
+  scorers:
+    promptfoo:  { enabled: true,  version: "0.90.0" }
+    deepeval:   { enabled: false, version: "2.0.0" }
+    ragas:      { enabled: false, version: "0.2.0" }
+  execution:
+    concurrency: 16
+    backend: threadpool
+  storage:
+    postgres: { dsn_env: PGDSN }
+    redis:    { enabled: true }
+  integrations:
+    agentRuntime: langgraph
+    llmProvider:  [qwen-cloud, openai]
+    vectorStore:  qdrant
+    tracing:      langfuse
