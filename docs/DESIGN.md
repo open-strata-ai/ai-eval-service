@@ -6,7 +6,7 @@
 
 | item | value |
 | --- | --- |
-| **repo** | `ai-eval-service`（polyrepo：`github.com/openstrata/ai-eval-service`，tag `v1.0.0`） |
+| **repo** | `ai-eval-service`（polyrepo：`github.com/open-strata-ai/ai-eval-service`，tag `v1.0.0`） |
 | **Language · Framework** | Python · FastAPI + Pydantic v2 + Poetry (§15.5.1) |
 | **domain** | ai-native (§15.2 / §15.2.1) |
 | **Optional** | optional (off by default, lit on demand starting from phase 2/E4, §4.6 / §6 / §12.2) |
