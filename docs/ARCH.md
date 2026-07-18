@@ -1,6 +1,6 @@
 # ai-eval-service · Architecture Document (ARCH)
 
-> Positioning and boundaries, responsibility list, domain model, external integration (Adapter). Source of fact: `design/DESIGN.md`.
+> Positioning and boundaries, responsibility list, domain model, external integration (Adapter). Source of fact: `docs/DESIGN.md`.
 
 ## 1. Positioning and boundaries
 
@@ -258,4 +258,4 @@ container.register(ScorerPort, RagasScorer(config), key="ragas_faithfulness")
 
 | Version | Date | Description |
 | --- | --- | --- |
-| v1.0 | 2026-07-17 | Extract architecture skeleton based on `design/DESIGN.md` §1/§2/§3/§6 |
+| v1.0 | 2026-07-17 | Extract architecture skeleton based on `docs/DESIGN.md` §1/§2/§3/§6 |

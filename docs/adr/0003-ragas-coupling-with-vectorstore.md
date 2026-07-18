@@ -1,15 +1,15 @@
-# ADR-0004: Report storage and long-term trends
+# ADR-0003: Coupling of Ragas and VectorStore
 
-- **Status**: Pending Alignment
+- **Status**: Pending (Open)
 - **Date**: 2026-07-17
 - **Suggested by**: OpenStrata Architecture Group
 - **Repository**: ai-eval-service
-- **Source**: `design/DESIGN.md` §13 Open Issue
+- **Source**: `docs/DESIGN.md` §13 Open Issue
 - **Association**: (within this repository)
 
 ##Context
 
-Will the trend of cross-version indicators drop to PG, or will it be unified into MLflow (stage four MLOps)? It needs to be clearly assigned to the `mlops` switch (§12.1) to avoid double writing.
+RAG evaluation requires retrieving context (§4.6.2 Fidelity/Context Accuracy), is it mandatory that `vectorStore` be lit? How to declare dependency verification with §12.4 (`rag` depends on `memory`/`vectorStore`, evaluate whether it is the same).
 
 ## Decision Options (Options Considered)
 
@@ -19,7 +19,7 @@ Will the trend of cross-version indicators drop to PG, or will it be unified int
 
 ## Recommended decision (Decision)
 
-This ADR solidifies "report storage and long-term trends" into architectural decision records and incorporates them into `design/adr/` for continuous tracking. This issue stems from the `design/DESIGN.md` §13 open issue and is still open.
+This ADR solidifies the "coupling of Ragas and VectorStore" into an architectural decision record and incorporates it into `docs/adr/` for continuous tracking. This issue stems from the `docs/DESIGN.md` §13 open issue and is still open.
 
 **Conservative Default Principle**: Before the final decision is made, the "minimum available + explicit configuration switch" shall prevail, maintain the current behavior, and not destroy the existing contract and cross-repository SPI interface; this ADR status will be written back after review by the relevant team.
 
@@ -27,10 +27,11 @@ This ADR solidifies "report storage and long-term trends" into architectural dec
 
 ## To be aligned / Follow-ups (Follow-ups)
 
-- Associated architecture documents §12.1 (as a basis for decision-making and a source of consistency verification).
+- Associated architecture documents §12.4 (as a basis for decision-making and a source of consistency verification).
+- Associated architecture documents §4.6.2 (as a basis for decision-making and a source of consistency verification).
 - Solidify the decision before the review at the corresponding stage, and write the final conclusion back into this ADR (the status is changed from "Pending" to "Adopted").
 
 ## Traceback
 
-- Upstream design: `design/DESIGN.md` §13 Open issue
-- Relevance index: see `design/adr/README.md`
+- Upstream design: `docs/DESIGN.md` §13 Open issue
+- Relevance index: see `docs/adr/README.md`

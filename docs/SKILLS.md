@@ -1,6 +1,6 @@
 # ai-eval-service · Coding skills (SKILLS)
 
-> Assessment pipeline, pluggable scorers, observability and security (PII). Source of fact: `design/DESIGN.md`.
+> Assessment pipeline, pluggable scorers, observability and security (PII). Source of fact: `docs/DESIGN.md`.
 
 ## 1. Evaluation pipeline (load → run → score → aggregate)
 
@@ -202,4 +202,4 @@ scorer_errors = Counter("scorer_errors_total", "Scorer errors", ["scorer_key"])
 
 | Version | Date | Description |
 | --- | --- | --- |
-| v1.0 | 2026-07-17 | Extract skill skeleton based on `design/DESIGN.md` §4/§5/§11 |
+| v1.0 | 2026-07-17 | Extract skill skeleton based on `docs/DESIGN.md` §4/§5/§11 |

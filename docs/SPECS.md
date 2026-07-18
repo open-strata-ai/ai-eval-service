@@ -1,6 +1,6 @@
 # ai-eval-service · Specification Contract (SPECS)
 
-> API design (REST/SDK), data model (storage), configuration and deployment. Source of fact: `design/DESIGN.md`.
+> API design (REST/SDK), data model (storage), configuration and deployment. Source of fact: `docs/DESIGN.md`.
 
 ## 1. API design (REST/SDK contract)
 
@@ -281,4 +281,4 @@ Evaluation execution (running Agent, scoring) is usually **CPU load**; only when
 
 | Version | Date | Description |
 | --- | --- | --- |
-| v1.0 | 2026-07-17 | Extract specification skeleton based on `design/DESIGN.md` §7/§8/§10 |
+| v1.0 | 2026-07-17 | Extract specification skeleton based on `docs/DESIGN.md` §7/§8/§10 |

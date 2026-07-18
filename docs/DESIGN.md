@@ -1,6 +1,6 @@
 # ai-eval-service · Detailed design document (DESIGN)
 
-> This document is the detailed design fact source of `ai-eval-service`. It inherits the `arch/ARCH.md` (positioning and boundaries), `specs/SPECS.md` (contract) and `skills/SKILLS.md` (coding skills) of this repository, and strictly aligns with the corresponding chapters of "OpenStrata Architecture Design Document v2.8". Major design decisions are recorded as ADRs in `design/adr/`.
+> This document is the detailed design fact source of `ai-eval-service`. It inherits the `docs/ARCH.md` (positioning and boundaries), `docs/SPECS.md` (contract) and `docs/SKILLS.md` (coding skills) of this repository, and strictly aligns with the corresponding chapters of "OpenStrata Architecture Design Document v2.8". Major design decisions are recorded as ADRs in `docs/adr/`.
 
 ## Meta information (header)
 
@@ -13,7 +13,7 @@
 | **Platform version** | `v1.0.0` (corresponding to `openstrata-meta/repos.yaml`, `bom.yaml` released `2026-07-15`) |
 | **Document Status** | Draft (Draft) |
 | **Responsible Person** | OpenStrata Architecture Group |
-| **Affiliated links** | This repository: [arch/ARCH.md](./../arch/ARCH.md) · [skills/SKILLS.md](./../skills/SKILLS.md) · [specs/SPECS.md](./../specs/SPECS.md); Architecture documents: §4.6 (MLOps and evaluation layer), §6 (Agent Full life cycle), §10.4 (SPI multiple implementations), §15.5 (self-developed service technology stack and DDD layering), §16 (release management and BOM/Eval SPI) |
+| **Affiliated links** | This repository: [docs/ARCH.md](./ARCH.md) · [docs/SKILLS.md](./SKILLS.md) · [docs/SPECS.md](./SPECS.md); Architecture documents: §4.6 (MLOps and evaluation layer), §6 (Agent Full life cycle), §10.4 (SPI multiple implementations), §15.5 (self-developed service technology stack and DDD layering), §16 (release management and BOM/Eval SPI) |
 
 ---
 
@@ -317,7 +317,7 @@ report = client.reports.wait(run.run_id)      #poll to done
 print(report.metrics_summary)
 ```
 
-> Compatibility commitment (echoing §16.1 SemVer): This service REST prefix `/v1`, SPI `Eval: 1.0.0`; destructive changes must bump `MAJOR` and be accompanied by ADR (see `design/adr/`).
+> Compatibility commitment (echoing §16.1 SemVer): This service REST prefix `/v1`, SPI `Eval: 1.0.0`; destructive changes must bump `MAJOR` and be accompanied by ADR (see `docs/adr/`).
 
 ---
 
