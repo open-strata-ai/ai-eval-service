@@ -1,64 +1,64 @@
-# ai-eval-service · 架构文档（ARCH）
+# ai-eval-service · Architecture Document (ARCH)
 
-> 定位与边界、职责清单、领域模型、外部集成（Adapter）。事实源：`design/DESIGN.md`。
+> Positioning and boundaries, responsibility list, domain model, external integration (Adapter). Source of fact: `design/DESIGN.md`.
 
-## 1. 定位与边界
+## 1. Positioning and boundaries
 
-`ai-eval-service` 是 OpenStrata 的**评测服务（Evaluation Service）**，位于 `ai-native` 域，是 Agent 全生命周期（§6）中"评测阶段（§6.3）"与"MLOps 与评测层（§4.6）"的工程承载者。以 `Eval` SPI（`bom.yaml` `interface_versions.Eval = 1.0.0`）为统一端口，将 Promptfoo / DeepEval / Ragas 等外部评测框架收敛为平台内可编排、可替换的评测能力。
+`ai-eval-service` is OpenStrata's **Evaluation Service**, located in the `ai-native` domain. It is the engineering bearer of the "Evaluation Phase (§6.3)" and "MLOps and Evaluation Layer (§4.6)" in the Agent's full life cycle (§6). Using `Eval` SPI (`bom.yaml` `interface_versions.Eval = 1.0.0`) as a unified port, external evaluation frameworks such as Promptfoo / DeepEval / Ragas are converged into orchestratable and replaceable evaluation capabilities within the platform.
 
-**单一职责**：评估数据管理 + 评测执行 + 指标评分 + 报告聚合。
+**Single Responsibility**: Assessment data management + Assessment execution + Metric scoring + Report aggregation.
 
-### 1.1 不负责
+### 1.1 Not responsible
 
-| 维度 | 负责方 |
+| Dimensions | Responsible party |
 | --- | --- |
-| 在线对话 / 推理 | `ai-gateway-core`（LLMProvider SPI） |
-| Agent 运行时编排 | `ai-gateway-core` + AgentRuntime（LangGraph） |
-| 线上 LLM 追踪 | Langfuse（Tracing SPI） |
-| 评测报告展示 UI | `ai-portal-frontend` / `ai-admin-frontend` |
-| 模型微调 / 实验追踪 | MLflow（MLOps SPI，阶段四） |
+| Online conversation/reasoning | `ai-gateway-core` (LLMProvider SPI) |
+| Agent runtime orchestration | `ai-gateway-core` + AgentRuntime (LangGraph) |
+| Online LLM Tracking | Langfuse (Tracing SPI) |
+| Evaluation report display UI | `ai-portal-frontend` / `ai-admin-frontend` |
+| Model fine-tuning/experiment tracking | MLflow (MLOps SPI, stage 4) |
 
-### 1.2 分层位置
+### 1.2 Hierarchical location
 
-属于"AI 原生"应用层能力，经 SPI 适配外部评测框架。被 `ai-platform-api` 异步投递评测任务（图中 `EV`），产出报告回流。
+It belongs to the "AI native" application layer capabilities and is adapted to the external evaluation framework through SPI. The evaluation task (`EV` in the figure) is delivered asynchronously by `ai-platform-api`, and the output report is reflowed.
 
-### 1.3 可选性
+### 1.3 Optional
 
-R1–R7 全部 `optional`，随 `openstrata.yaml` 的 `eval` 开关点亮（§12.1）。PII 扫描（R8）复用平台基础风控。
-
----
-## 2. 职责清单
-
-按 DDD 应用层用例拆分，对外承诺以下能力：
-
-| # | 职责 | 说明 |
-| --- | --- | --- |
-| R1 | **评估数据集管理** | 创建 / 版本化 / 划分（Train·Eval·Test）/ 分布分析 / Bad Case 入库 |
-| R2 | **评测用例（Case）管理** | 单条 Case 的输入 / 期望 / 上下文 / 标签（幻觉/安全/格式等归因标签） |
-| R3 | **评测任务编排** | 提交评测运行、绑定目标 Agent（AgentRuntime）、选择评分器集合、进度追踪 |
-| R4 | **评测执行（Run）** | 加载数据 → 调用 AgentRuntime 执行 → 采集轨迹/输出 |
-| R5 | **指标评分（Score）** | 通过可插拔 Scorer（Promptfoo/DeepEval/Ragas）对输出打分 |
-| R6 | **结果聚合与报告** | 聚合指标、生成 Report（准确率/安全性/延迟/成本等），支持回归对比 |
-| R7 | **回归/安全/RAG 评测** | 回归对比、红队注入（Promptfoo Red Team）、RAG 忠实度专项评测 |
-| R8 | **PII 与数据安全** | 评测数据集 PII 扫描、脱敏、访问隔离（复用平台基础风控端口） |
+R1–R7 are all `optional`, lit with the `eval` switch in `openstrata.yaml` (§12.1). Basic risk control of PII scanning (R8) reuse platform.
 
 ---
-## 3. 领域概念与模型
+## 2. Responsibilities List
 
-领域层以**纯逻辑、零外部依赖**定义聚合与实体。核心聚合根：`EvalDataset`、`EvalRun`、`EvalReport`。
+Split by DDD application layer use cases, the following external capabilities are promised:
 
-### 3.1 领域词汇表
-
-| 概念 | 含义 | 关键属性 |
+| # | Responsibilities | Description |
 | --- | --- | --- |
-| **EvalDataset** | 一组评测用例的集合，带版本 | `dataset_id`、`name`、`version`、`split`（train/eval/test）、`source`（人工/合成/线上采样/BadCase）、分布元数据 |
-| **EvalCase** | 单条评测用例 | `case_id`、`inputs`、可选 `expected`/`reference`、RAG `contexts`、归因 `tags` |
-| **Metric** | 一个评分维度（如准确率/忠实度/幻觉率） | `metric_key`、`scorer`、`direction`（max/min）、阈值 |
-| **Score** | 某 Case 在某 Metric 下的得分 | `case_id`、`metric_key`、`value`、`reason`、`trace_ref` |
-| **EvalRun** | 一次评测执行（绑定数据集+Agent+评分器集） | `run_id`、`agent_ref`、`dataset_version`、`status`、`progress` |
-| **EvalReport** | 一次 Run 的聚合结果 | `report_id`、`run_id`、各 Metric 聚合值、对比基线 |
+| R1 | **Evaluation Dataset Management** | Creation / Versioning / Partition (Train·Eval·Test)/Distribution Analysis/Bad Case Storage |
+| R2 | **Evaluation Use Case (Case) Management** | Input/expectation/context/label of a single Case (attribution labels such as illusion/safety/format) |
+| R3 | **Evaluation Task Arrangement** | Submit evaluation run, bind target Agent (AgentRuntime), select scorer set, progress tracking |
+| R4 | **Evaluation Execution (Run)** | Load data → Call AgentRuntime to execute → Collect trace/output |
+| R5 | **Metric Score (Score)** | Score output through pluggable Scorer (Promptfoo/DeepEval/Ragas) |
+| R6 | **Result Aggregation and Reporting** | Aggregate indicators, generate Report (accuracy/security/latency/cost, etc.), support regression comparison |
+| R7 | **Return/Security/RAG Evaluation** | Return Comparison, Red Team Injection (Promptfoo Red Team), RAG Fidelity Special Evaluation |
+| R8 | **PII and data security** | Evaluation data set PII scanning, desensitization, access isolation (reusing platform basic risk control port) |
 
-### 3.2 聚合关系
+---
+## 3. Domain concepts and models
+
+The domain layer defines aggregations and entities with pure logic and zero external dependencies. Core aggregate roots: `EvalDataset`, `EvalRun`, `EvalReport`.
+
+### 3.1 Domain Glossary
+
+| Concept | Meaning | Key attributes |
+| --- | --- | --- |
+| **EvalDataset** | A collection of evaluation use cases, with version | `dataset_id`, `name`, `version`, `split` (train/eval/test), `source` (artificial/synthetic/online sampling/BadCase), distribution metadata |
+| **EvalCase** | Single evaluation case | `case_id`, `inputs`, optional `expected`/`reference`, RAG `contexts`, attribution `tags` |
+| **Metric** | A scoring dimension (such as accuracy/fidelity/illusion rate) | `metric_key`, `scorer`, `direction` (max/min), threshold |
+| **Score** | The score of a certain Case under a certain Metric | `case_id`, `metric_key`, `value`, `reason`, `trace_ref` |
+| **EvalRun** | An evaluation execution (bound data set + Agent + scorer set) | `run_id`, `agent_ref`, `dataset_version`, `status`, `progress` |
+| **EvalReport** | Aggregation results of a Run | `report_id`, `run_id`, each Metric aggregate value, comparison baseline |
+
+### 3.2 Aggregation relationship
 
 ```
 EvalDataset (1)  *--  (0..*) EvalCase      : contains
@@ -67,31 +67,31 @@ EvalRun     (1)  -->  (1)   EvalReport      : aggregated into
 EvalDataset (1)  -->  (0..*) EvalRun        : evaluated by
 ```
 
-### 3.3 领域约束
+### 3.3 Domain constraints
 
-- `EvalDataset.version` 由领域服务在每次内容变更时自增（语义化版本，对接 §6.4 版本管理）。
-- `EvalRun.status` 状态机：`pending → running → scoring → aggregated → done | failed`。
-- `Score.value` 必须落在 Scorer 声明的 `[min, max]` 范围，否则领域层拒绝并标记 Run 为 `failed`。
-- `tag_categories` 归因标签枚举：`hallucination`（幻觉）、`security`（安全/注入）、`format`（格式错误）、`toxicity`（毒性）、`bias`（偏见）、`factuality`（事实性）。
+- `EvalDataset.version` is incremented by the domain service every time the content changes (semantic version, docking with §6.4 version management).
+- `EvalRun.status` state machine: `pending → running → scoring → aggregated → done | failed`.
+- `Score.value` must fall within the `[min, max]` range declared by the Scorer, otherwise the domain layer rejects and marks the Run as `failed`.
+- `tag_categories` Attribution tag enumeration: `hallucination`, `security`, `format`, `toxicity`, `bias`, `factuality`.
 
-### 3.4 端口定义（领域层端口）
+### 3.4 Port definition (domain layer port)
 
 ```python
-# AgentRuntime 端口 —— 领域层仅定义接口，不依赖实现
+# AgentRuntime port —— The domain layer only defines interfaces，Does not depend on implementation
 class AgentRuntimePort(Protocol):
     def run_case(self, ref: AgentRef, case: EvalCase) -> CaseResult:
-        """调用目标 Agent 执行单条评测用例，返回输出与可观测轨迹引用。"""
+        """Call the target Agent to execute a single evaluation case and return the output and observable trajectory reference."""
         ...
 
-# Scorer 端口 —— 可插拔评分器接口
+# Scorer port —— Pluggable scorer interface
 class ScorerPort(Protocol):
     scorer_key: str
     supported_metrics: list[str]
     def score(self, case: EvalCase, result: CaseResult) -> list[Score]:
-        """对单个 Case 的输出进行评分，返回一个或多个维度的得分。"""
+        """Score the output of a single Case, returning a score along one or more dimensions."""
         ...
 
-# Repository 端口 —— 数据持久化抽象
+# Repository port —— Data persistence abstraction
 class EvalRepositoryPort(Protocol):
     def save_dataset(self, dataset: EvalDataset) -> None: ...
     def load_cases(self, dataset_id: str, version: str, split: str) -> list[EvalCase]: ...
@@ -101,32 +101,32 @@ class EvalRepositoryPort(Protocol):
 ```
 
 ---
-## 4. 外部集成（Adapter 防腐层）
+## 4. External integration (Adapter anti-corrosion layer)
 
-评测服务本身**不持有**模型与向量能力，全部经对应 SPI 的 Adapter（ACL 防腐层）接入，保证同类多实现可切换、外部语义不泄漏。
+The evaluation service itself does not hold ** model and vector capabilities, and is all accessed through the corresponding SPI Adapter (ACL anti-corrosion layer) to ensure that multiple implementations of the same type can be switched and external semantics are not leaked.
 
-### 4.1 依赖能力矩阵
+### 4.1 Dependency capability matrix
 
-| 依赖能力 | SPI 端口 | 默认实现 | 本服务用途 | 适配器类 |
+| Dependency capabilities | SPI port | Default implementation | Purpose of this service | Adapter class |
 | --- | --- | --- | --- | --- |
-| 模型供给 | `LLMProvider` (`1.0.0`) | Qwen/OpenAI/Claude | Agent 推理调用；合成数据生成 | `LLMProviderAdapter` 经网关统一出口 |
-| 向量检索 | `VectorStore` (`1.1.0`) | Qdrant | RAG 评测（Ragas）检索上下文忠实度 | `VectorStoreAdapter` |
-| Agent 运行时 | `AgentRuntime` (`1.3.0`) | LangGraph | 执行被评 Agent | `AgentRuntimeAdapter` |
-| LLM 追踪 | `Tracing` | Langfuse（optional） | 评测轨迹留痕、报告关联 | `TracingAdapter` |
-| 缓存/KV | `Cache` (`1.0.0`) | Redis | 任务状态、评分结果临时缓存 | `CacheAdapter` |
-| 认证授权 | `Auth` (`1.0.0`) | Keycloak | 数据集/报告的租户隔离与访问控制 | `AuthAdapter` |
+| Model supply | `LLMProvider` (`1.0.0`) | Qwen/OpenAI/Claude | Agent inference call; synthetic data generation | `LLMProviderAdapter` Unified export via gateway |
+| Vector retrieval | `VectorStore` (`1.1.0`) | Qdrant | RAG evaluation (Ragas) retrieval context fidelity | `VectorStoreAdapter` |
+| Agent runtime | `AgentRuntime` (`1.3.0`) | LangGraph | Execute the evaluated Agent | `AgentRuntimeAdapter` |
+| LLM tracking | `Tracing` | Langfuse (optional) | Evaluation track traces, report correlation | `TracingAdapter` |
+| Cache/KV | `Cache` (`1.0.0`) | Redis | Temporary cache of task status and scoring results | `CacheAdapter` |
+| Authentication and Authorization | `Auth` (`1.0.0`) | Keycloak | Tenant isolation and access control for datasets/reports | `AuthAdapter` |
 
-### 4.2 适配器架构
+### 4.2 Adapter architecture
 
 ```
 ┌──────────────────────────────────────────────┐
-│            ai-eval-service 内部               │
-│  领域层: ScorerPort / AgentRuntimePort /     │
+│            ai-eval-service internal               │
+│  Domain layer: ScorerPort / AgentRuntimePort /     │
 │          LLMProviderPort / EvalRepositoryPort │
 └────────────┬─────────────────────────────────┘
-             │ 实现 Port（依赖倒置 DIP）
+             │ accomplish Port（dependency inversion DIP）
 ┌────────────▼─────────────────────────────────┐
-│         基础设施层 Adapter（ACL）              │
+│         infrastructure layer Adapter（ACL）              │
 │  AgentRuntimeAdapter  →  ai-gateway-core     │
 │  LLMProviderAdapter   →  ai-gateway-core     │
 │  VectorStoreAdapter   →  Qdrant / Milvus     │
@@ -136,12 +136,12 @@ class EvalRepositoryPort(Protocol):
 └──────────────────────────────────────────────┘
 ```
 
-### 4.3 适配器注册与 DI
+### 4.3 Adapter registration and DI
 
-适配器通过依赖注入（DI）容器注册，领域层通过端口抽象调用：
+The adapter is registered through the dependency injection (DI) container, and the domain layer is called through the port abstraction:
 
 ```python
-# 基础设施层注册
+# Infrastructure layer registration
 container.register(AgentRuntimePort, AgentRuntimeAdapter, singleton=True)
 container.register(LLMProviderPort, LLMProviderAdapter, singleton=True)
 container.register(ScorerPort, PromptfooScorer, key="promptfoo")
@@ -149,11 +149,11 @@ container.register(ScorerPort, DeepEvalScorer, key="deepeval")
 container.register(ScorerPort, RagasScorer, key="ragas")
 ```
 
-### 4.4 Scorer 注册表（ProviderSelector）
+### 4.4 Scorer Registry (ProviderSelector)
 
 ```python
 class ScorerRegistry:
-    """按 scorer_key 选择已注册的适配器实例。"""
+    """Select a registered adapter instance by scorer_key."""
     def __init__(self, scorers: dict[str, ScorerPort]):
         self._scorers = scorers
 
@@ -166,61 +166,61 @@ class ScorerRegistry:
         return list(self._scorers.keys())
 ```
 
-### 4.5 GPU 边界说明
+### 4.5 GPU Boundary Description
 
-- 阶段一~三仅第三方 LLM API（无需 GPU）。
-- 自托管推理（vLLM）仅阶段四 full 档点亮，且始终经 `LLMProvider` SPI 切换，对评测用例零改动。
-- 本服务本身**无 GPU 硬依赖**，评测执行（跑 Agent、打分）通常为 **CPU 负载**。
+- Phases 1 to 3 are only third-party LLM APIs (no GPU required).
+- Self-hosted inference (vLLM) only turns on the full stage four stage, and is always switched via `LLMProvider` SPI, with zero changes to the evaluation use cases.
+- The service itself has **no hard dependence on GPU**, and the evaluation execution (running Agent, scoring) is usually **CPU load**.
 
 ---
-## 5. DDD 分层映射
+## 5. DDD hierarchical mapping
 
 ```
-接入层（①）      FastAPI router → Pydantic Schema → 用例层
-应用层（②）      EvalUseCase（编排 load→run→score→aggregate）
-领域层（③）      EvalDataset / EvalRun / EvalReport（聚合根）
-                  + 端口接口（AgentRuntimePort / ScorerPort / EvalRepositoryPort）
-基础设施层（④）   SQLAlchemy Repository、Adapter 实现（LangGraph / Promptfoo / Qdrant）
+access layer（①）      FastAPI router → Pydantic Schema → Use case layer
+Application layer（②）      EvalUseCase（Orchestrate load→run→score→aggregate）
+Domain layer（③）      EvalDataset / EvalRun / EvalReport（aggregate root）
+                  + port interface（AgentRuntimePort / ScorerPort / EvalRepositoryPort）
+infrastructure layer（④）   SQLAlchemy Repository、Adapter accomplish（LangGraph / Promptfoo / Qdrant）
 ```
 
-- **领域层纯逻辑**：零框架依赖，可脱离 DB/FASTAPI 单测。
-- **基础设施层封装外部**：Adapter 作为防腐层（ACL），隔离外部框架语义泄漏。
-- **应用层编排用例**：持有端口抽象、调度领域对象，不关心基础设施细节。
+- **Pure logic in domain layer**: zero framework dependency, can be separated from DB/FASTAPI single test.
+- **Infrastructure layer encapsulates the outside**: Adapter acts as an anti-corruption layer (ACL) to isolate external framework semantic leakage.
+- **Application Layer Orchestration Use Case**: Holds port abstraction, schedules domain objects, and does not care about infrastructure details.
 
-### 5.1 Repository 目录结构
+### 5.1 Repository directory structure
 
 ```
 ai-eval-service/
 ├── src/
-│   ├── domain/                    # ③ 领域层（纯逻辑，零外部依赖）
+│   ├── domain/                    #③ Domain layer (pure logic, zero external dependencies)
 │   │   ├── model/                 # EvalDataset / EvalCase / EvalRun / Score / EvalReport
-│   │   ├── port/                  # 端口接口（AgentRuntimePort / ScorerPort / EvalRepositoryPort）
-│   │   └── service/               # 领域服务（版本化、状态机、聚合算法）
-│   ├── application/               # ② 应用层（用例编排）
+│   │   ├── port/                  #Port interface (AgentRuntimePort/ScorerPort/EvalRepositoryPort)
+│   │   └── service/               #Domain services (versioning, state machine, aggregation algorithm)
+│   ├── application/               #② Application layer (use case orchestration)
 │   │   └── usecase/               # EvalUseCase（load→run→score→aggregate）
-│   ├── interface/                 # ① 接入层（FastAPI + Pydantic）
-│   │   ├── rest/                  # REST 路由与中间件
-│   │   └── schema/                # 请求/响应 Pydantic 模型
-│   ├── infrastructure/            # ④ 基础设施层
-│   │   ├── adapter/               # SPI 适配器实现（ACL 防腐层）
-│   │   ├── repository/            # SQLAlchemy Repository 实现
-│   │   └── config/                # 本仓局部配置片段
-│   └── di/                        # 依赖注入容器（Adapter 注册、ScorerRegistry）
+│   ├── interface/                 #① Access layer (FastAPI + Pydantic)
+│   │   ├── rest/                  #REST routing and middleware
+│   │   └── schema/                #Request/Response Pydantic Model
+│   ├── infrastructure/            #④ Infrastructure layer
+│   │   ├── adapter/               #SPI adapter implementation (ACL anti-corrosion layer)
+│   │   ├── repository/            #SQLAlchemy Repository implementation
+│   │   └── config/                #Local configuration fragment of this repository
+│   └── di/                        #Dependency injection container (Adapter registration, ScorerRegistry)
 ├── tests/
-│   ├── unit/                      # 领域层纯逻辑单测（pytest）
-│   ├── integration/               # Adapter + DB 集成测试（testcontainers）
-│   ├── contract/                  # SPI 端口契约测试
-│   └── e2e/                       # 端到端测试（FastAPI TestClient）
+│   ├── unit/                      #Domain layer pure logic single test (pytest)
+│   ├── integration/               #Adapter + DB integration tests (testcontainers)
+│   ├── contract/                  #SPI port contract test
+│   └── e2e/                       #End-to-end testing (FastAPI TestClient)
 ├── pyproject.toml  Dockerfile  helm/
 └── arch/  design/  skills/  specs/
 ```
 
-### 5.2 依赖注入容器
+### 5.2 Dependency injection container
 
 ```python
 # src/di/container.py
 class Container:
-    """轻量 DI 容器，按需装配 Adapter 实现到端口。"""
+    """Lightweight DI container that assembles Adapter implementations to ports on demand."""
     def __init__(self, config: EvalConfig):
         self._registry: dict[type, dict[str, object]] = {}
 
@@ -232,7 +232,7 @@ class Container:
     def resolve(self, port: type, key: str = "default") -> object:
         return self._registry[port][key]
 
-# 装配示例
+# Assembly example
 container = Container(config)
 container.register(AgentRuntimePort, AgentRuntimeAdapter())
 container.register(EvalRepositoryPort, SqlAlchemyEvalRepository(session_factory))
@@ -241,21 +241,21 @@ container.register(ScorerPort, DeepEvalScorer(config), key="deepeval_hallucinati
 container.register(ScorerPort, RagasScorer(config), key="ragas_faithfulness")
 ```
 
-### 5.3 技术栈约束
+### 5.3 Technology stack constraints
 
-| 层级 | 框架/库 | 版本 | 说明 |
+| Hierarchy | Framework/Library | Version | Description |
 | --- | --- | --- | --- |
-| 接入层 | FastAPI + Pydantic v2 | latest | REST 接口 + 请求校验 |
-| 应用层 | 纯 Python | — | 用例编排，无框架依赖 |
-| 领域层 | 纯 Python + Protocols | — | 领域模型 + 端口抽象 |
-| 基础设施 DB | SQLAlchemy 2.0 + asyncpg | latest | PostgreSQL 异步访问 |
-| 基础设施缓存 | redis-py (async) | latest | Redis 任务状态/缓存 |
-| DI | 自研轻量容器 或 `dependency-injector` | — | Adapter ↔ Port 装配 |
-| 测试 | pytest + testcontainers | latest | 三层测试（domain/infra/e2e） |
+| Access layer | FastAPI + Pydantic v2 | latest | REST interface + request verification |
+| Application layer | Pure Python | — | Use case orchestration, no framework dependencies |
+| Domain layer | Pure Python + Protocols | — | Domain model + port abstraction |
+| Infrastructure DB | SQLAlchemy 2.0 + asyncpg | latest | PostgreSQL asynchronous access |
+| Infrastructure cache | redis-py (async) | latest | Redis task status/cache |
+| DI | Self-developed lightweight container or `dependency-injector` | — | Adapter ↔ Port assembly |
+| Test | pytest + testcontainers | latest | Three-tier testing (domain/infra/e2e) |
 
 ---
-## 变更记录
+## Change record
 
-| 版本 | 日期 | 说明 |
+| Version | Date | Description |
 | --- | --- | --- |
-| v1.0 | 2026-07-17 | 基于 `design/DESIGN.md` §1/§2/§3/§6 提取架构骨架 |
+| v1.0 | 2026-07-17 | Extract architecture skeleton based on `design/DESIGN.md` §1/§2/§3/§6 |

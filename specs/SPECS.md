@@ -1,24 +1,24 @@
-# ai-eval-service · 规格契约（SPECS）
+# ai-eval-service · Specification Contract (SPECS)
 
-> API 设计（REST/SDK）、数据模型（存储）、配置与部署。事实源：`design/DESIGN.md`。
+> API design (REST/SDK), data model (storage), configuration and deployment. Source of fact: `design/DESIGN.md`.
 
-## 1. API 设计（REST / SDK 契约）
+## 1. API design (REST/SDK contract)
 
-接入层（DDD ①）用 FastAPI 暴露 REST，Pydantic v2 作 Schema 与校验。所有写接口经 `Auth` Port 注入租户上下文（`tenant_id` 来自 Keycloak Token）。
+The access layer (DDD ①) uses FastAPI to expose REST, and Pydantic v2 for Schema and verification. All write interfaces are injected into the tenant context via the `Auth` Port (`tenant_id` comes from Keycloak Token).
 
-### 1.1 REST 端点契约
+### 1.1 REST Endpoint Contract
 
-| 方法 | 路径 | 用例 | 说明 |
+| Method | Path | Use Case | Description |
 | --- | --- | --- | --- |
-| `POST` | `/v1/datasets` | R1 | 创建数据集 |
-| `GET` | `/v1/datasets/{id}?version=` | R1 | 获取数据集（含版本） |
-| `POST` | `/v1/datasets/{id}/cases` | R2 | 新增评测用例 |
-| `POST` | `/v1/runs` | R3/R4 | 提交评测运行（绑定 AgentRef + 数据集版本 + scorer_set） |
-| `GET` | `/v1/runs/{run_id}` | R3 | 查询运行进度 |
-| `POST` | `/v1/runs/{run_id}/cancel` | R3 | 取消运行 |
-| `POST` | `/v1/runs/{run_id}/score` | R5 | 触发/重跑评分（可指定 scorer 子集） |
-| `GET` | `/v1/reports/{report_id}` | R6 | 获取聚合报告（支持 `?baseline=run_id` 回归对比） |
-| `GET` | `/v1/reports/{report_id}/export?fmt=md\|json\|grafana` | R6 | 报告导出 |
+| `POST` | `/v1/datasets` | R1 | Create dataset |
+| `GET` | `/v1/datasets/{id}?version=` | R1 | Get the data set (including version) |
+| `POST` | `/v1/datasets/{id}/cases` | R2 | New evaluation case |
+| `POST` | `/v1/runs` | R3/R4 | Submit evaluation run (bind AgentRef + dataset version + scorer_set) |
+| `GET` | `/v1/runs/{run_id}` | R3 | Query the running progress |
+| `POST` | `/v1/runs/{run_id}/cancel` | R3 | Cancel run |
+| `POST` | `/v1/runs/{run_id}/score` | R5 | Trigger/rerun scoring (scorer subset can be specified) |
+| `GET` | `/v1/reports/{report_id}` | R6 | Get aggregate report (supports `?baseline=run_id` regression comparison) |
+| `GET` | `/v1/reports/{report_id}/export?fmt=md\|json\|grafana` | R6 | Report export |
 
 ### 1.2 Pydantic v2 Schema
 
@@ -36,7 +36,7 @@ class RunStatus(str, Enum):
 class AgentRef(BaseModel):
     agent_id: str
     tenant_id: str
-    version: str | None = None          # 不填则取当前线上版本
+    version: str | None = None          #If left blank, the current online version will be taken.
 
 class RunCreate(BaseModel):
     dataset_id: str
@@ -44,7 +44,7 @@ class RunCreate(BaseModel):
     agent: AgentRef
     scorer_set: list[str] = Field(..., min_length=1)
     split: Split = Split.eval
-    baseline_run_id: str | None = None  # 回归对比基线
+    baseline_run_id: str | None = None  #regression vs. baseline
 
 class RunView(BaseModel):
     run_id: str
@@ -56,11 +56,11 @@ class ReportView(BaseModel):
     report_id: str
     run_id: str
     baseline_run_id: str | None
-    metrics_summary: dict[str, float]       # metric_key -> 聚合值
+    metrics_summary: dict[str, float]       #metric_key -> aggregate value
     regression_delta: dict[str, float] | None
 ```
 
-### 1.3 FastAPI 路由骨架
+### 1.3 FastAPI routing skeleton
 
 ```python
 from fastapi import APIRouter, Depends, HTTPException
@@ -69,25 +69,25 @@ router = APIRouter(prefix="/v1", tags=["eval"])
 
 @router.post("/runs", response_model=RunView, status_code=202)
 async def create_run(body: RunCreate, tenant_id: str = Depends(get_tenant_id)):
-    """提交评测运行，异步执行。"""
+    """Submit the evaluation and run it asynchronously."""
     ...
 
 @router.get("/runs/{run_id}", response_model=RunView)
 async def get_run(run_id: str, tenant_id: str = Depends(get_tenant_id)):
-    """查询评测运行进度。"""
+    """Query the evaluation running progress."""
     ...
 
 @router.get("/reports/{report_id}", response_model=ReportView)
 async def get_report(report_id: str, baseline: str | None = None,
                      tenant_id: str = Depends(get_tenant_id)):
-    """获取聚合报告，支持回归对比。"""
+    """Get aggregated reports and support regression comparison."""
     ...
 ```
 
-### 1.4 SDK 消费契约
+### 1.4 SDK consumption contract
 
 ```python
-# 面向 ai-sdk-python 消费方
+# For ai-sdk-python consumer side
 from openstrata.sdk import EvalClient
 client = EvalClient(base_url="http://ai-eval-service", token="<keycloak-token>")
 run = client.runs.create(
@@ -95,48 +95,48 @@ run = client.runs.create(
     agent={"agent_id": "customer-service", "tenant_id": "t-b"},
     scorer_set=["promptfoo_accuracy", "deepeval_hallucination"],
 )
-report = client.reports.wait(run.run_id)      # 轮询至 done
+report = client.reports.wait(run.run_id)      #poll to done
 print(report.metrics_summary)
 ```
 
-### 1.5 兼容性承诺
+### 1.5 Compatibility Commitment
 
-REST 前缀 `/v1`、SPI `Eval: 1.0.0`。破坏性变更须 bump `MAJOR` 并附 ADR。
+REST prefix `/v1`, SPI `Eval: 1.0.0`. Breaking changes must bump `MAJOR` and be accompanied by ADR.
 
 ---
-## 2. 数据模型与存储
+## 2. Data model and storage
 
-存储遵循 §4.9 底座：`PostgreSQL 16`（关系/结构化）+ `Redis 7.4`（任务状态/缓存）。领域层定义 `EvalRepositoryPort`，基础设施层以 SQLAlchemy 实现。
+Storage follows §4.9 Base: `PostgreSQL 16` (relational/structured) + `Redis 7.4` (task state/cache). The domain layer defines `EvalRepositoryPort`, and the infrastructure layer is implemented in SQLAlchemy.
 
-### 2.1 核心表 DDL
+### 2.1 Core table DDL
 
 ```sql
--- 评估数据集（版本化复合主键）
+-- Evaluation dataset（Versioned composite primary key）
 CREATE TABLE eval_dataset (
     dataset_id   TEXT,
     version      TEXT,
     name         TEXT,
     source       TEXT,            -- human|synthetic|online_sample|badcase
     split        TEXT,
-    dist_meta    JSONB,           -- 类别/长度/难度分布
+    dist_meta    JSONB,           -- category/length/Difficulty distribution
     tenant_id    TEXT NOT NULL,
     created_at   TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (dataset_id, version)
 );
 
--- 评测用例
+-- Evaluation use case
 CREATE TABLE eval_case (
     case_id    TEXT PRIMARY KEY,
     dataset_id TEXT NOT NULL,
     version    TEXT NOT NULL,
     inputs     JSONB NOT NULL,
     expected   JSONB,
-    contexts   JSONB,            -- RAG 场景检索上下文
-    tags       TEXT[],           -- 归因标签：hallucination|security|format|...
+    contexts   JSONB,            -- RAG scene retrieval context
+    tags       TEXT[],           -- attribution tag：hallucination|security|format|...
     FOREIGN KEY (dataset_id, version) REFERENCES eval_dataset(dataset_id, version)
 );
 
--- 评测运行
+-- Evaluation run
 CREATE TABLE eval_run (
     run_id           TEXT PRIMARY KEY,
     agent_ref        JSONB NOT NULL,
@@ -149,7 +149,7 @@ CREATE TABLE eval_run (
     baseline_run_id  TEXT
 );
 
--- 单条得分
+-- Single score
 CREATE TABLE eval_score (
     run_id     TEXT NOT NULL,
     case_id    TEXT NOT NULL,
@@ -159,7 +159,7 @@ CREATE TABLE eval_score (
     PRIMARY KEY (run_id, case_id, metric_key)
 );
 
--- 聚合报告
+-- Aggregation reporting
 CREATE TABLE eval_report (
     report_id        TEXT PRIMARY KEY,
     run_id           TEXT NOT NULL UNIQUE,
@@ -169,16 +169,16 @@ CREATE TABLE eval_report (
 );
 ```
 
-### 2.2 存储分工
+### 2.2 Storage division of labor
 
-| 数据类型 | 存储 | 说明 |
+| Data type | Storage | Description |
 | --- | --- | --- |
-| 数据集/用例/运行/得分/报告 | PostgreSQL | 持久化事实源；版本化靠复合主键 |
-| 运行进度/评分中间结果缓存 | Redis | 高并发读写、幂等去重 |
-| 大规模合成数据/轨迹附件 | 对象存储（MinIO，optional） | 大体积不落 PG |
-| 实验指标历史（可选） | MLflow（阶段四 MLOps） | 跨版本趋势 |
+| Dataset/Usecase/Run/Score/Report | PostgreSQL | Persistent source of truth; versioned by composite primary key |
+| Running progress/scoring intermediate result cache | Redis | High concurrent reading and writing, idempotent deduplication |
+| Large-scale synthetic data/trajectory attachment | Object storage (MinIO, optional) | Large volume does not fall into PG |
+| Experiment metric history (optional) | MLflow (Phase 4 MLOps) | Cross-version trends |
 
-### 2.3 SQLAlchemy ORM 模型骨架
+### 2.3 SQLAlchemy ORM model skeleton
 
 ```python
 from sqlalchemy import Column, String, Float, JSON, ARRAY, TIMESTAMP, ForeignKeyConstraint
@@ -220,29 +220,29 @@ class EvalRunModel(Base):
     baseline_run_id = Column(String)
 ```
 
-### 2.4 划分策略
+### 2.4 Division strategy
 
-数据集划分（Train/Eval/Test）为**逻辑划分**（按 `split` 列 + 配置化规则），不物理复制，降低存储成本。`split` 枚举：`train | eval | test`。
+Data set division (Train/Eval/Test) is **logical division** (by `split` columns + configuration rules), without physical replication, reducing storage costs. `split` enum: `train | eval | test`.
 
 ---
-## 3. 配置与部署
+## 3. Configuration and deployment
 
-### 3.1 配置片段
+### 3.1 Configuration fragment
 
-本仓只持有**局部配置片段**，全局由元仓 `openstrata-meta/dependencies/config/` 渲染。
+This repository only holds **local configuration fragments**, and the global configuration is rendered by the meta repository `openstrata-meta/dependencies/config/`.
 
 ```yaml
 # ai-eval-service/infrastructure/config/eval.yaml
 eval:
   enabled: true
-  # 评分器开关：core 默认开 promptfoo，optional 按需点亮
+  #Scorer switch: core is on by default promptfoo, optional is on as needed
   scorers:
     promptfoo:  { enabled: true,  version: "0.90.0" }
     deepeval:   { enabled: false, version: "2.0.0" }
     ragas:      { enabled: false, version: "0.2.0" }
   execution:
-    concurrency: 16            # 并行评测线程数
-    backend: threadpool        # threadpool | ray（大数据集）
+    concurrency: 16            #Number of parallel evaluation threads
+    backend: threadpool        #threadpool | ray (large data set)
   storage:
     postgres: { dsn_env: PGDSN }
     redis:    { enabled: true }
@@ -253,32 +253,32 @@ eval:
     tracing:      langfuse
 ```
 
-### 3.2 部署形态（四档预制）
+### 3.2 Deployment form (four levels of prefabrication)
 
-| Profile | 阶段 | 是否含本服务 | 资源 |
+| Profile | Stage | Whether this service is included | Resources |
 | --- | --- | --- | --- |
-| `starter` | 一·尝鲜 | 默认关 | N/A |
-| `standard` | 二·增强 | 可选（点亮 `eval`） | K8s 单租户，CPU 为主 |
-| `advanced` | 三·规模化治理 | 含（`eval: [promptfoo, deepeval, ragas]`） | 多团队共享，CPU |
-| `full` | 四·工程化与自治 | 含（全量 Eval） | + 自托管推理需 GPU 节点（仅评测本地模型时） |
+| `starter` | 1. Early adopters | Default off | N/A |
+| `standard` | 2·Enhancement | Optional (light on `eval`) | K8s single tenant, CPU-based |
+| `advanced` | 3. Scaled governance | Contains (`eval: [promptfoo, deepeval, ragas]`) | Multi-team sharing, CPU |
+| `full` | 4. Engineering and Autonomy | Included (full Eval) | + Self-hosted inference requires GPU nodes (only when evaluating local models) |
 
-### 3.3 资源定性
+### 3.3 Resource Qualification
 
-评测执行（跑 Agent、打分）通常为 **CPU 负载**；仅当被评对象使用**自托管模型（local-qwen-vllm）** 时，才经 `LLMProvider` 触发 GPU 推理——本服务本身无 GPU 硬依赖。
+Evaluation execution (running Agent, scoring) is usually **CPU load**; only when the object being evaluated uses **self-hosted model (local-qwen-vllm)**, GPU inference is triggered through `LLMProvider` - this service itself has no hard dependence on GPU.
 
-### 3.4 容器与交付物
+### 3.4 Containers and Deliverables
 
-- `Dockerfile`：`python:3.12-slim` 基础镜像，Poetry 安装依赖；无状态优先，配置外置。
-- `helm/`：Deployment + Service +（可选）HPA；与 `profiles/*.yaml` 联动渲染。
-- 调度：`advanced/full` 下可配 Kueue 队列，与自托管推理共享 GPU 池（仅 full）。
+- `Dockerfile`: `python:3.12-slim` base image, Poetry installation dependency; stateless priority, external configuration.
+- `helm/`: Deployment + Service + (optional) HPA; rendered in conjunction with `profiles/*.yaml`.
+- Scheduling: Kueue queue can be configured under `advanced/full` to share the GPU pool with self-hosted inference (full only).
 
-### 3.5 依赖校验
+### 3.5 Dependency verification
 
-`eval` 点亮需 `agentRuntime` 与 `modelProvider` 已开。校验逻辑在元仓 `profiles/*.yaml` 中声明，部署时做前置检查。
+`eval` needs to be turned on if `agentRuntime` and `modelProvider` are turned on. The verification logic is declared in the metacang `profiles/*.yaml` and is pre-checked during deployment.
 
 ---
-## 变更记录
+## Change record
 
-| 版本 | 日期 | 说明 |
+| Version | Date | Description |
 | --- | --- | --- |
-| v1.0 | 2026-07-17 | 基于 `design/DESIGN.md` §7/§8/§10 提取规格骨架 |
+| v1.0 | 2026-07-17 | Extract specification skeleton based on `design/DESIGN.md` §7/§8/§10 |

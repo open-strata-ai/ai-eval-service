@@ -1,32 +1,32 @@
-# ai-eval-service · 编码技能（SKILLS）
+# ai-eval-service · Coding skills (SKILLS)
 
-> 评估流水线、可插拔评分器、可观测性与安全（PII）。事实源：`design/DESIGN.md`。
+> Assessment pipeline, pluggable scorers, observability and security (PII). Source of fact: `design/DESIGN.md`.
 
-## 1. 评估流水线（load → run → score → aggregate）
+## 1. Evaluation pipeline (load → run → score → aggregate)
 
-评测执行是应用层的核心用例（`EvalUseCase`），按四阶段串行推进，每阶段可水平扩展（并行评测用 ThreadPool / Ray）。
+Evaluation execution is the core use case of the application layer (`EvalUseCase`), which is promoted serially in four stages, and each stage can be expanded horizontally (ThreadPool/Ray is used for parallel evaluation).
 
-### 1.1 流水线总览
+### 1.1 Pipeline Overview
 
 ```
-提交 EvalRun ──> ① load ──> ② run ──> ③ score ──> ④ aggregate ──> 产出 EvalReport
-  (绑定 AgentRef +      │         │           │            │           (准确率/安全性/
-   DatasetVersion +      │         │           │            │            延迟/成本)
+submit EvalRun ──> ① load ──> ② run ──> ③ score ──> ④ aggregate ──> output EvalReport
+  (binding AgentRef +      │         │           │            │           (Accuracy/security/
+   DatasetVersion +      │         │           │            │            Delay/cost)
    ScorerSet)            │         │           │            │
-                    加载数据集    调用Agent   并行打分      聚合+基线对比
-                    按split划分   采集trace   各维度指标    生成报告
+                    Load dataset    callAgent   Parallel scoring      polymerization+baseline comparison
+                    according tosplitdivide   collectiontrace   Indicators of each dimension    Generate report
 ```
 
-### 1.2 各阶段编码要点
+### 1.2 Key points of coding at each stage
 
-| 阶段 | 输入 | 处理 | 输出 | 编码要点 |
+| Stages | Input | Processing | Output | Coding Essentials |
 | --- | --- | --- | --- | --- |
-| **load** | `dataset_version`、划分规则 | 从 Repository 加载 Case，按 `split` 切分 | `EvalCase[]` | 数据源可插拔（PG/对象存储/合成生成器）；`split` 过滤在仓库层完成 |
-| **run** | `EvalCase[]`、`AgentRef` | 经 `AgentRuntimePort` 调用目标 Agent | `CaseResult{output, trace_ref, latency, cost}` | 线程池并发（`concurrency` 配置）；AgentRuntime 适配器注入 |
-| **score** | `CaseResult[]`、`ScorerSet` | 对每个 Case 并行调用各 `ScorerPort` | `Score[]` | 评分器注册表按 `scorer_key` 路由；Score.value 范围校验 |
-| **aggregate** | `Score[]`、可选 `baseline_run_id` | 按 `metric_key` 聚合（mean/P95/通过率） | `EvalReport` | 基线 diff 计算 `regression_delta`；支持报告导出格式 |
+| **load** | `dataset_version`, partitioning rules | Load Case from Repository, split by `split` | `EvalCase[]` | Data source is pluggable (PG/Object Storage/Synthetic Generator); `split` filtering is completed at the repository layer |
+| **run** | `EvalCase[]`, `AgentRef` | Call the target Agent via `AgentRuntimePort` | `CaseResult{output, trace_ref, latency, cost}` | Thread pool concurrency (`concurrency` configuration); AgentRuntime adapter injection |
+| **score** | `CaseResult[]`, `ScorerSet` | Call each `ScorerPort` in parallel for each Case | `Score[]` | Scorer registry routed by `scorer_key`; Score.value range check |
+| **aggregate** | `Score[]`, optional `baseline_run_id` | Aggregate by `metric_key` (mean/P95/pass rate) | `EvalReport` | Baseline diff calculation `regression_delta`; support report export format |
 
-### 1.3 并行执行模式
+### 1.3 Parallel execution mode
 
 ```python
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -44,14 +44,14 @@ class EvalUseCase:
         results: list[CaseResult] = []
         scores: list[Score] = []
 
-        # Phase run: 并行执行 Agent
+        #Phase run: execute Agent in parallel
         with ThreadPoolExecutor(max_workers=self._concurrency) as pool:
             futures = {pool.submit(self._agent.run_case, run.agent_ref, c): c for c in cases}
             for f in as_completed(futures):
                 results.append(f.result())
                 self._update_progress(run, len(results), len(cases))
 
-        # Phase score: 每个 Case 经每个 Scorer 打分
+        #Phase score: Each Case is scored by each Scorer
         for case, result in zip(cases, results):
             for key in run.scorer_set:
                 scorer = self._scorers.get(key)
@@ -63,36 +63,36 @@ class EvalUseCase:
         return report
 ```
 
-### 1.4 状态管理
+### 1.4 Status Management
 
-`EvalRun.status` 状态机通过 Redis 缓存 + PG 持久化双写：
+`EvalRun.status` state machine is dual-written through Redis cache + PG persistence:
 
 ```
 pending → running → scoring → aggregated → done
-           ↘ (任意阶段异常) → failed
+           ↘ (Abnormality at any stage) → failed
 ```
 
-- 幂等：同一 `run_id` 重复提交通过 Redis 去重。
-- 可取消：`POST /v1/runs/{run_id}/cancel` 设置取消标志，各阶段检查并提前退出。
+- Idempotent: Duplicate submissions with the same `run_id` are deduplicated through Redis.
+- Cancelable: `POST /v1/runs/{run_id}/cancel` sets the cancellation flag, checks each stage and exits early.
 
 ---
-## 2. 指标与评分器设计（Pluggable Scorers）
+## 2. Indicator and scorer design (Pluggable Scorers)
 
-评分器可插拔：领域层定义 `ScorerPort`，每个外部评测框架作为**适配器（Adapter）**实现端口。新增评分维度 = 新增一个 Adapter，领域层与已有用例零改动（依赖倒置 DIP）。
+The scorer is pluggable: the domain layer defines `ScorerPort`, and each external evaluation framework implements the port as an Adapter. New scoring dimension = Add a new Adapter, zero changes to the domain layer and existing use cases (dependency inversion DIP).
 
-### 2.1 评分器矩阵
+### 2.1 Scorer Matrix
 
-| Scorer（Adapter） | BOM 组件 | 版本 | 状态 | SPI | 评测维度 |
+| Scorer (Adapter) | BOM component | Version | Status | SPI | Evaluation dimensions |
 | --- | --- | --- | --- | --- | --- |
-| `PromptfooScorer` | promptfoo | 0.90.0 | **core**（默认开） | `Eval` | 准确率/安全性/一致性/红队注入 |
-| `DeepEvalScorer` | deepeval | 2.0.0 | optional | `Eval` | 幻觉率/毒性/偏见/格式 |
-| `RagasScorer` | ragas | 0.2.0 | optional | `Eval` | 忠实度/答案相关性/上下文精度 |
+| `PromptfooScorer` | promptfoo | 0.90.0 | **core** (on by default) | `Eval` | Accuracy/security/consistency/red team injection |
+| `DeepEvalScorer` | deepeval | 2.0.0 | optional | `Eval` | hallucination rate/toxicity/bias/format |
+| `RagasScorer` | ragas | 0.2.0 | optional | `Eval` | Fidelity/Answer Relevance/Context Accuracy |
 
-### 2.2 评分器实现模式
+### 2.2 Scorer implementation mode
 
 ```python
 class PromptfooScorer:
-    """Promptfoo 评分器适配器 —— 封装 promptfoo CLI 为 ScorerPort。"""
+    """Promptfoo Scorer Adapter - wraps the promptfoo CLI as a ScorerPort."""
     scorer_key = "promptfoo"
     supported_metrics = ["accuracy", "security", "consistency", "redteam"]
 
@@ -100,47 +100,47 @@ class PromptfooScorer:
         self._config = config
 
     def score(self, case: EvalCase, result: CaseResult) -> list[Score]:
-        # 构建 promptfoo 测评配置
+        #Build promptfoo evaluation configuration
         promptfoo_config = self._build_config(case, result)
-        # 调用 promptfoo eval（子进程或 SDK）
+        #Call promptfoo eval (child process or SDK)
         raw_scores = promptfoo_evaluate(promptfoo_config)
-        # 归一化到 Score 领域对象
+        #Normalize to Score domain object
         return [
             Score(case_id=case.case_id, metric_key=m.metric, value=m.score, reason=m.reason)
             for m in raw_scores.results
         ]
 ```
 
-### 2.3 新增评分器步骤
+### 2.3 Steps to add a new grader
 
-1. 在 `infrastructure/adapters/` 实现 `ScorerPort`，封装对应框架 CLI/SDK。
-2. 以 `scorer_key` 注册到 `ScorerRegistry`（经 DI 容器）。
-3. 若需新 Metric，在领域层 `Metric` 枚举声明 `metric_key` + 方向 + 阈值。
-4. 提供 SPI 契约测试（`Eval: 1.0.0` 端口一致性断言）。
+1. Implement `ScorerPort` in `infrastructure/adapters/` and encapsulate the corresponding framework CLI/SDK.
+2. Register to `ScorerRegistry` (via DI container) with `scorer_key`.
+3. If a new metric is required, declare `metric_key` + direction + threshold in the `Metric` enumeration at the domain layer.
+4. Provide SPI contract testing (`Eval: 1.0.0` port consistency assertion).
 
-### 2.4 评分器配置
+### 2.4 Scorer configuration
 
 ```yaml
-# scorer_set 选择示例（对应评测运行请求）
+# scorer_set Select example（Corresponding to evaluation run request）
 scorer_set:
-  - promptfoo_accuracy        # core 默认
-  - promptfoo_security        # 红队/注入
-  - deepeval_hallucination    # optional，点亮 deepeval 后可用
-  - ragas_faithfulness        # optional，RAG 场景
+  - promptfoo_accuracy        #core default
+  - promptfoo_security        #Red Team/Injection
+  - deepeval_hallucination    #optional, available after lighting deepeval
+  - ragas_faithfulness        #optional, RAG scenario
 ```
 
 ---
-## 3. 可观测性与安全（PII 数据保护）
+## 3. Observability and Security (PII Data Protection)
 
-### 3.1 可观测性支柱
+### 3.1 Observability Pillar
 
-| 支柱 | 选型 | 本服务落地 |
+| Pillars | Selection | Implementation of this service |
 | --- | --- | --- |
-| 基础 Tracing + Audit（**core**） | OpenTelemetry + 不可变审计日志 | 每次 Run/Score 打 OTel Span（含 `run_id`/`tenant_id`/`agent_id`）；所有写操作留痕 |
-| Metrics（推荐） | Prometheus + Grafana | 暴露 `eval_runs_total`、`eval_score_latency`、`scorer_errors`；报告可 `export?fmt=grafana` |
-| LLM 专项 Tracing（optional） | Langfuse | 经 `TracingAdapter` 关联评测轨迹与线上链路 |
+| Basic Tracing + Audit (**core**) | OpenTelemetry + immutable audit log | Every Run/Score hits OTel Span (including `run_id`/`tenant_id`/`agent_id`); all write operations leave traces |
+| Metrics (recommended) | Prometheus + Grafana | Expose `eval_runs_total`, `eval_score_latency`, `scorer_errors`; reportable `export?fmt=grafana` |
+| LLM Special Tracing (optional) | Langfuse | Associating evaluation tracks and online links via `TracingAdapter` |
 
-### 3.2 OTel Span 编码规范
+### 3.2 OTel Span coding specification
 
 ```python
 from opentelemetry import trace
@@ -156,38 +156,38 @@ def execute_run(run: EvalRun):
         "agent_id": run.agent_ref.agent_id,
         "dataset_version": run.dataset_version,
     })
-    # ... 执行流水线
+    #... execution pipeline
 ```
 
-### 3.3 安全与 PII 处理
+### 3.3 Security and PII Handling
 
-评测数据往往含真实用户语料（线上采样 1%、Bad Case），PII 处理是核心安全项。
+Evaluation data often contains real user corpus (1% online sampling, Bad Case), and PII processing is a core security item.
 
-| 措施 | 实现 | 性质 |
+| Measures | Implementation | Nature |
 | --- | --- | --- |
-| **PII 扫描 + 脱敏** | 接入平台基础风控 `riskControl.pii_scan` 端口，入库前对 `inputs`/`expected` 做 NER 检测与掩码 | core |
-| **注入/越狱检测** | 复用 `riskControl.injection_scan`；评测数据集中的对抗样本经 `promptfoo` 红队打分 | core |
-| **频率异常/限流** | `riskControl.rate_limit` 保护评测 API | core |
-| **租户隔离** | 所有数据集/报告表带 `tenant_id`，经 `Auth` Port（Keycloak）强制行级隔离 | core |
-| **输出敏感信息检测** | 评分后结果经 `pii_scan` 二次校验，避免报告泄露原始 PII | core |
-| **高级护栏** | 幻觉检测/合规规则/人工审批，由 `security` 开关启用 | optional |
+| **PII scanning + desensitization** | Access the basic risk control `riskControl.pii_scan` port of the platform, and perform NER detection and masking on `inputs`/`expected` before entering the database | core |
+| **Injection/Jailbreak Detection** | Reuse `riskControl.injection_scan`; the adversarial samples in the evaluation data set were scored by the red team with `promptfoo` | core |
+| **Frequency Abnormality/Current Limitation** | `riskControl.rate_limit` Protection Evaluation API | core |
+| **Tenant Isolation** | All datasets/report tables with `tenant_id`, enforce row level isolation via `Auth` Port (Keycloak) | core |
+| **Output sensitive information detection** | After scoring, the results are verified twice by `pii_scan` to avoid the report leaking the original PII | core |
+| **Advanced Guardrails** | Illusion detection/compliance rules/human approval, enabled by `security` switch | optional |
 
-### 3.4 PII 数据流
+### 3.4 PII data flow
 
 ```
-评测数据入库 ──> PII 扫描 + 脱敏 ──> 脱敏后入库 (tenant_id 隔离)
-(人工/合成/线上采样/BadCase)         │
-                                      ├──> 评测执行 + 评分
+Evaluation data storage ──> PII scanning + Desensitization ──> Storage after desensitization (tenant_id isolation)
+(Artificial/synthesis/Online sampling/BadCase)         │
+                                      ├──> Evaluation execution + score
                                       │         │
                                       │    ┌────┘
                                       ▼    ▼
-                              报告输出前二次 PII 校验 ──> 安全报告
-                              对抗样本 ──> Promptfoo 红队打分 (injection_scan)
+                              Report output first two times PII check ──> security report
+                              Adversarial examples ──> Promptfoo Red team scores (injection_scan)
 ```
 
-**设计原则**：本服务**不自研** PII/注入检测，统一经平台基础风控端口（core 基线），避免重复与策略漂移。
+**Design Principle**: This service **does not self-develop** PII/injection detection, and unifies the basic risk control port (core baseline) of the platform to avoid duplication and policy drift.
 
-### 3.5 Prometheus Metrics 暴露
+### 3.5 Prometheus Metrics Exposure
 
 ```python
 from prometheus_client import Counter, Histogram
@@ -198,8 +198,8 @@ scorer_errors = Counter("scorer_errors_total", "Scorer errors", ["scorer_key"])
 ```
 
 ---
-## 变更记录
+## Change record
 
-| 版本 | 日期 | 说明 |
+| Version | Date | Description |
 | --- | --- | --- |
-| v1.0 | 2026-07-17 | 基于 `design/DESIGN.md` §4/§5/§11 提取技能骨架 |
+| v1.0 | 2026-07-17 | Extract skill skeleton based on `design/DESIGN.md` §4/§5/§11 |
